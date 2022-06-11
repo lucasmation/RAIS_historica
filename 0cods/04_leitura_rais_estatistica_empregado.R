@@ -2,6 +2,9 @@ gc()
 rm(list = ls())
 library(readxl)
 library(data.table)
+library(dplyr)
+library(tidyverse)
+
 caminho <- "\\\\STORAGE6\\astec\\Estudos\\InovAtiva_Dados\\DADOS_RAIS_BRUTA"
 lista_arquivos<-list.files(pattern = "BASE_RAIS_BRUTA_UNICA",caminho,full.names = T,recursive = F)
 i <- 2019
@@ -53,8 +56,7 @@ for(i in 1:length(lista_arquivos)){
 
 base[,.(Ntotal = sum(N,na.rm = T)),by=c("tipo_base","ano")]
 
-library(dplyr)
-library(tidyverse)
+
 res1 <- base %>%
   group_by(tipo_base,ano) %>%
   summarise(Ntotal = sum(N,na.rm=T)) %>%
@@ -94,10 +96,10 @@ lista_arquivos<-lista_arquivos[anos>2009]
 anos<-anos[anos>2009]
 uniqueanos <- unique(anos)
 i <- 9
-for(i in length(anos):1){
+for(i in 7:1){
   print(i)
   ano <- uniqueanos[i]
-  base <- rbindlist(lapply(lista_arquivos[(anos==ano)],function(x) fread(x,nrows = -1,dec=",")))
+  base <- rbindlist(lapply(lista_arquivos[(anos==ano)],function(x) fread(x,nrows = (-1),dec=",")))
   
   
 
@@ -142,7 +144,9 @@ for(i in length(anos):1){
   # names(base)
   # write.csv2(names(base),"1files\\xx.csv")
   # write.csv2(names(base),"1files\\xx.csv")
-  setnames(base,varschange$RAIS_EST,varschange$RAIS_BRUTA)
+  ids <- which(varschange$RAIS_EST %in% names(base))
+  
+  setnames(base,varschange$RAIS_EST[ids],varschange$RAIS_BRUTA[ids])
   
   
   
@@ -151,6 +155,7 @@ for(i in length(anos):1){
   
   
   base[,tipo_base:=1]
+  base[,IN_RETIFICACAO_VINCULO:=1]
   base[,CO_CREA:=1:.N]
   base[,CN_NUMERO_SEQ:=1]
   base[,ano:=ano]
@@ -196,7 +201,7 @@ for(i in length(anos):1){
   
   
   base4 <- base[!(id_duplicatas==2 & id_duplicatas_unique==1),]
-  
+  if(nrow(base4)>0){
   base4[,id_base4_n_unica:=1:.N,by=c(vars_identificacao)]
   
   base4[,.N,by="id_base4_n_unica"]
@@ -204,16 +209,16 @@ for(i in length(anos):1){
   
   saveRDS(base4,
           paste0("\\\\STORAGE6\\astec\\Estudos\\InovAtiva_Dados\\DADOS_RAIS_BRUTA\\EST\\BASE_4_",ano,".rds"))
-  
+  }
   baset <- base[(id_duplicatas==2 & id_duplicatas_unique==1),]
   
   
   baset <- cbind(baset, zeroslinha = rowSums(baset[, vars_unique,with=FALSE]==0))
   baset[,maxzero:=max(zeroslinha),by=vars_identificacao]
   
-  expr2 <-  paste0("b3<-baset[,.(",
-                   paste(vars_unique_numerico,"=length(unique(",vars_unique_numerico,"))",
-                         collapse = ",",sep=""),
+  expr2 <-  paste0("b3<-baset[,.('",
+                   paste(vars_unique_numerico,"'=length(unique('",vars_unique_numerico,"'))",
+                         collapse = ",'",sep=""),
                    "),by=c('",paste0(c(vars_identificacao,"id_duplicatas",
                                        "id_duplicatas_unique",
                                        vars_unique_n_numerico),collapse = "','"),"')]")
@@ -284,10 +289,15 @@ for(i in length(anos):1){
   base2[,.N,by="id_base2_n_unica"]
   base2 <- base2[(id_base2_n_unica==1),]
   
-  
+  if(nrow(base4)>0){
   basefinal <- rbindlist(list(baset_unica,
                               base4[,tipo_duplicata:="duplicata_nao_dupla_nao_resolvida"],
                               base2[,tipo_duplicata:="duplicatas_iguais"]),fill = TRUE)
+  }else{
+    basefinal <- rbindlist(list(baset_unica,
+                                base2[,tipo_duplicata:="duplicatas_iguais"]),fill = TRUE)
+    
+  }
   
   
   base1 <- readRDS(paste0("\\\\STORAGE6\\astec\\Estudos\\InovAtiva_Dados\\DADOS_RAIS_BRUTA\\EST\\BASE_1_",ano,".rds"))  
